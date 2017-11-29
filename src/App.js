@@ -1,29 +1,73 @@
 // @flow
 
 import React from 'react';
-import {StyleSheet, Text, View, ScrollView, Image} from 'react-native';
+import autobind from 'class-autobind';
+import PropTypes from 'prop-types';
+import ReactNative, {
+  StyleSheet,
+  Text,
+  View,
+  ScrollView,
+  Image,
+  Animated,
+  Easing
+} from 'react-native';
+
+import CardComponent from './Card';
+import SelectedCard from './SelectedCard';
+import measureNode from './measureNode';
 
 import cardFixture from './cardFixture';
 
-type Item = {
-  id: number,
-  text: string,
-  image: string
-};
+import type {Card, Measurement} from './types';
 
 type State = {
-  cards: Array<Item>
+  cards: Array<Card>,
+  selectedCard: ?{
+    card: Card,
+    measurement: Measurement
+  },
+  isDragging: boolean
 };
 
 export default class App extends React.Component<{}, State> {
-  constructor() {
-    super(...arguments);
-    this.state = {
-      cards: cardFixture
+  _gesturePosition: Animated.ValueXY;
+  _listContainer: ?Object;
+  _scrollValue: Animated.Value;
+  _scrollPosition: number;
+  _listContainerMeasurement: ?Measurement;
+
+  static childContextTypes = {
+    gesturePosition: PropTypes.object,
+    getScrollPosition: PropTypes.func
+  };
+
+  getChildContext() {
+    return {
+      gesturePosition: this._gesturePosition,
+      getScrollPosition: this._getScrollPosition
     };
   }
+
+  constructor() {
+    super(...arguments);
+    autobind(this);
+    this.state = {
+      cards: cardFixture,
+      selectedCard: null,
+      isDragging: false
+    };
+
+    this._gesturePosition = new Animated.ValueXY({x: 0, y: 0});
+    this._scrollValue = new Animated.Value(0);
+    this._scrollPosition = 0;
+    this._scrollValue.addListener(({value}) => {
+      this._scrollPosition = value;
+    });
+  }
+
   render() {
-    let {cards} = this.state;
+    let {cards, selectedCard, isDragging} = this.state;
     return (
       <View style={styles.container}>
         <View
@@ -36,29 +80,113 @@ export default class App extends React.Component<{}, State> {
         >
           <Text>Drop Here</Text>
         </View>
-        <View>
-          <ScrollView horizontal>
-            {cards.map(card => {
+        <View ref={node => (this._listContainer = node)}>
+          <Animated.ScrollView
+            horizontal
+            scrollEventThrottle={1}
+            onScroll={Animated.event(
+              [{nativeEvent: {contentOffset: {x: this._scrollValue}}}],
+              {useNativeDriver: true}
+            )}
+            scrollEnabled={!isDragging}
+          >
+            {cards.map((card, index) => {
               return (
-                <View key={card.id} style={styles.card}>
-                  <Image source={{uri: card.image}} style={{flex: 1}}>
-                    <View
-                      style={{
-                        flex: 1,
-                        justifyContent: 'center',
-                        alignItems: 'center'
-                      }}
-                    >
-                      <Text>{card.text}</Text>
-                    </View>
-                  </Image>
-                </View>
+                <CardComponent
+                  key={card.id}
+                  index={index}
+                  card={card}
+                  onGestureStart={(
+                    card: Card,
+                    measurement: Measurement,
+                    onSuccess?: () => void
+                  ) => {
+                    this._onGestureStart(card, measurement, onSuccess);
+                  }}
+                  onGestureStop={this._onGestureStop}
+                />
               );
             })}
-          </ScrollView>
+          </Animated.ScrollView>
         </View>
+        {selectedCard &&
+          isDragging && <SelectedCard selectedCard={selectedCard} />}
       </View>
     );
+  }
+
+  _getScrollPosition() {
+    return this._scrollPosition;
+  }
+
+  async _onGestureStart(
+    card: Card,
+    measurement: Measurement,
+    onSuccess?: () => void
+  ) {
+    let listContainer = ReactNative.findNodeHandle(this._listContainer);
+
+    let listContainerMeasurement = await measureNode(listContainer);
+    this._listContainerMeasurement = listContainerMeasurement;
+
+    this._gesturePosition.setValue({
+      x: 0,
+      y: 0
+    });
+
+    this._gesturePosition.setOffset({
+      x: measurement.x - this._getScrollPosition(),
+      y: listContainerMeasurement.y
+    });
+
+    this.setState(
+      {
+        selectedCard: {
+          card,
+          measurement
+        },
+        isDragging: true
+      },
+      () => {
+        onSuccess && onSuccess();
+      }
+    );
+  }
+
+  _onGestureStop(onSuccess?: () => void) {
+    let {selectedCard} = this.state;
+    Animated.parallel([
+      Animated.timing(this._gesturePosition.x, {
+        toValue: 0,
+        duration: 200,
+        easing: Easing.ease
+      }),
+      Animated.timing(this._gesturePosition.y, {
+        toValue: 0,
+        duration: 200,
+        easing: Easing.ease
+      })
+    ]).start(() => {
+      onSuccess && onSuccess();
+
+      this._gesturePosition.setOffset({
+        x:
+          (selectedCard &&
+            selectedCard.measurement.x - this._getScrollPosition()) ||
+          0,
+        y:
+          (this._listContainerMeasurement &&
+            this._listContainerMeasurement.y) ||
+          0
+      });
+
+      requestAnimationFrame(() => {
+        this.setState({
+          selectedCard: null,
+          isDragging: false
+        });
+      });
+    });
   }
 }
 
@@ -66,9 +194,5 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#fff'
-  },
-  card: {
-    height: 150,
-    width: 120
   }
 });
