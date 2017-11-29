@@ -9,6 +9,7 @@ import ReactNative, {
   View,
   ScrollView,
   Image,
+  Alert,
   Animated,
   Easing
 } from 'react-native';
@@ -36,16 +37,19 @@ export default class App extends React.Component<{}, State> {
   _scrollValue: Animated.Value;
   _scrollPosition: number;
   _listContainerMeasurement: ?Measurement;
+  _dropZone: ?Object;
 
   static childContextTypes = {
     gesturePosition: PropTypes.object,
-    getScrollPosition: PropTypes.func
+    getScrollPosition: PropTypes.func,
+    getDropZoneMeasurement: PropTypes.func
   };
 
   getChildContext() {
     return {
       gesturePosition: this._gesturePosition,
-      getScrollPosition: this._getScrollPosition
+      getScrollPosition: this._getScrollPosition,
+      getDropZoneMeasurement: () => this._dropZone
     };
   }
 
@@ -76,6 +80,9 @@ export default class App extends React.Component<{}, State> {
             alignItems: 'center',
             justifyContent: 'center',
             backgroundColor: '#b3c8e7'
+          }}
+          onLayout={event => {
+            this._dropZone = event.nativeEvent.layout;
           }}
         >
           <Text>Drop Here</Text>
@@ -153,40 +160,83 @@ export default class App extends React.Component<{}, State> {
     );
   }
 
-  _onGestureStop(onSuccess?: () => void) {
+  _onGestureStop(gesture: Object, onSuccess?: () => void) {
     let {selectedCard} = this.state;
-    Animated.parallel([
-      Animated.timing(this._gesturePosition.x, {
-        toValue: 0,
-        duration: 200,
-        easing: Easing.ease
-      }),
-      Animated.timing(this._gesturePosition.y, {
-        toValue: 0,
-        duration: 200,
-        easing: Easing.ease
-      })
-    ]).start(() => {
-      onSuccess && onSuccess();
+    if (this._dropZone && selectedCard && this._listContainerMeasurement) {
+      let dropZoneMeasurement = this._dropZone;
+      let selectedCardObject = selectedCard;
+      let listContainerMeasurement = this._listContainerMeasurement;
 
-      this._gesturePosition.setOffset({
-        x:
-          (selectedCard &&
-            selectedCard.measurement.x - this._getScrollPosition()) ||
-          0,
-        y:
-          (this._listContainerMeasurement &&
-            this._listContainerMeasurement.y) ||
-          0
-      });
+      let [, translateY] = this._gesturePosition.getTranslateTransform();
 
-      requestAnimationFrame(() => {
-        this.setState({
-          selectedCard: null,
-          isDragging: false
+      let {vx, vy, dy} = gesture;
+      let animation = {start: callback => callback()};
+      if (Math.abs(vy) > 0.4) {
+        animation = Animated.decay(this._gesturePosition, {
+          velocity: {x: vx, y: vy},
+          deceleration: 0.983
         });
+      }
+
+      animation.start(() => {
+        let isInside =
+          listContainerMeasurement.y +
+            this._gesturePosition.y._value +
+            selectedCardObject.measurement.h <=
+          dropZoneMeasurement.y + dropZoneMeasurement.height;
+
+        if (isInside) {
+          let {cards} = this.state;
+          Alert.alert(`you'r dropping ${selectedCardObject.card.text}`);
+          let cardIndex = cards.findIndex(
+            card => card.id === selectedCardObject.card.id
+          );
+          if (cardIndex > -1) {
+            cards.splice(cardIndex, 1);
+          }
+          requestAnimationFrame(() => {
+            this.setState({
+              cards,
+              selectedCard: null,
+              isDragging: false
+            });
+          });
+        } else {
+          Animated.parallel([
+            Animated.timing(this._gesturePosition.x, {
+              toValue: 0,
+              duration: 200,
+              easing: Easing.ease
+            }),
+            Animated.timing(this._gesturePosition.y, {
+              toValue: 0,
+              duration: 200,
+              easing: Easing.ease
+            })
+          ]).start(() => {
+            onSuccess && onSuccess();
+
+            this._gesturePosition.setOffset({
+              x:
+                (selectedCard &&
+                  selectedCard.measurement.x - this._getScrollPosition()) ||
+                0,
+              y:
+                (this._listContainerMeasurement &&
+                  this._listContainerMeasurement.y) ||
+                0
+            });
+
+            requestAnimationFrame(() => {
+              this.setState({
+                selectedCard: null,
+                isDragging: false
+              });
+            });
+          });
+        }
       });
-    });
+    }
   }
 }
 

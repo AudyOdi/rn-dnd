@@ -27,7 +27,7 @@ type Props = {
     measurement: Measurement,
     onSuccess?: () => void
   ) => void,
-  onGestureStop: (onSuccess?: () => void) => void
+  onGestureStop: (gestureState: Object, onSuccess?: () => void) => void
 };
 
 export default class CardComponent extends Component<Props> {
@@ -131,7 +131,7 @@ export default class CardComponent extends Component<Props> {
       return;
     }
     this._gestureInProgress = null;
-    this.props.onGestureStop(() => {
+    this.props.onGestureStop(gestureState, () => {
       this._opacity.setValue(1);
     });
   }
