@@ -164,7 +164,7 @@ export default class App extends React.Component<{}, State> {
     let {selectedCard} = this.state;
     if (this._dropZone && selectedCard && this._listContainerMeasurement) {
       let dropZoneMeasurement = this._dropZone;
-      let selectedCardObject = selectedCard;
+      let {card, measurement: cardMeasurement} = selectedCard;
       let listContainerMeasurement = this._listContainerMeasurement;
 
       let [, translateY] = this._gesturePosition.getTranslateTransform();
@@ -182,15 +182,13 @@ export default class App extends React.Component<{}, State> {
         let isInside =
           listContainerMeasurement.y +
             this._gesturePosition.y._value +
-            selectedCardObject.measurement.h <=
+            cardMeasurement.h <=
           dropZoneMeasurement.y + dropZoneMeasurement.height;
 
         if (isInside) {
           let {cards} = this.state;
-          Alert.alert(`you'r dropping ${selectedCardObject.card.text}`);
-          let cardIndex = cards.findIndex(
-            card => card.id === selectedCardObject.card.id
-          );
+          Alert.alert(`you'r dropping ${card.text}`);
+          let cardIndex = cards.findIndex(({id}) => id === card.id);
           if (cardIndex > -1) {
             cards.splice(cardIndex, 1);
           }
@@ -217,14 +215,8 @@ export default class App extends React.Component<{}, State> {
             onSuccess && onSuccess();
 
             this._gesturePosition.setOffset({
-              x:
-                (selectedCard &&
-                  selectedCard.measurement.x - this._getScrollPosition()) ||
-                0,
-              y:
-                (this._listContainerMeasurement &&
-                  this._listContainerMeasurement.y) ||
-                0
+              x: cardMeasurement.x - this._getScrollPosition(),
+              y: listContainerMeasurement.y
             });
 
             requestAnimationFrame(() => {

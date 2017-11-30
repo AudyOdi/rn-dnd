@@ -52,7 +52,6 @@ export default class CardComponent extends Component<Props> {
     this._gesture = PanResponder.create({
       onMoveShouldSetResponderCapture: (e, gestureState) => true,
       onMoveShouldSetPanResponderCapture: (e, gestureState) => {
-        console.log('gesture dy', gestureState.dy);
         return (
           Math.abs(gestureState.dy) > Math.abs(gestureState.dx) &&
           gestureState.dy < 0

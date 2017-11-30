@@ -28,10 +28,13 @@ export default class SelectedCard extends React.Component<Props> {
     let dropZone = getDropZoneMeasurement();
     let opacity = gesturePosition.y.interpolate({
       inputRange: [
-        (dropZone && dropZone.height / 8) || 70,
+        (dropZone && dropZone.height / 8) || 38,
+        (dropZone && dropZone.height / 4) || 75,
+        (dropZone && dropZone.height / 2) || 150,
         (dropZone && dropZone.height) || 300
       ],
-      outputRange: [0, 1]
+      outputRange: [0.2, 0.8, 1, 1],
+      extrapolate: 'clamp'
     });
     let animatedStyle = {
       transform: gesturePosition.getTranslateTransform(),
